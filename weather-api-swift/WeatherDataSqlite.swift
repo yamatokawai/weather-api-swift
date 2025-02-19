@@ -66,10 +66,10 @@ class OneSqlite: NSObject {
             );
         """
         
+        // コンパイルしたSQL文が格納される変数
         var createTable: OpaquePointer? = nil
-        
-        // SQL文をコンパイルして準備
-        // 引数(DBへのポインタ, 実行するSQL分, SQL分のバイト数, SQLstmtをの準備用ポインタ, 残り(複数行ある場合など)のSQL文)
+    
+        // 引数(DBへのポインタ, 実行するSQL分, SQL分のバイト数, SQLstmtの準備用ポインタ, 残り(複数行ある場合など)のSQL文)
         if sqlite3_prepare_v2(self.dbPointer, createSql, -1, &createTable, nil) == SQLITE_OK {
             // 準備成功したら実行
             if sqlite3_step(createTable) == SQLITE_DONE {
@@ -87,6 +87,7 @@ class OneSqlite: NSObject {
     // データ挿入
     func insertOneTable(temperature: String, weather: String) -> Bool {
         // SQL文：membersテーブルに追加するよう指示
+        // ? でバインドして挿入
         let insertSql = """
             INSERT INTO members
             (temperature, weather)
@@ -141,9 +142,11 @@ class OneSqlite: NSObject {
     
     /// テーブル情報取得（状況確認用関数）
     func printAllMembers(){
+        // テーブル情報全取得
         let querySql = "SELECT * FROM members"
         var queryStmt: OpaquePointer? = nil
         if sqlite3_prepare_v2(self.dbPointer, querySql, -1, &queryStmt, nil) == SQLITE_OK {
+            // 各行のデータを1つずつ表示
             while sqlite3_step(queryStmt) == SQLITE_ROW {
                 let id = sqlite3_column_int(queryStmt, 0)
                 let temperature = String(cString: sqlite3_column_text(queryStmt, 1))
