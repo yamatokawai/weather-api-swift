@@ -30,6 +30,7 @@ class ViewController: UIViewController {
         let urlString = "https://api.openweathermap.org/data/2.5/weather?lat=\(latitude)&lon=\(longitude)&units=metric&appid=\(API_KEY)"
         guard let url = URL(string: urlString) else { return }
         
+        // openWeatherApi：天気情報取得
         let task = URLSession.shared.dataTask(with: url) { data, response, error in
             if let error = error {
                 print(error)
@@ -47,13 +48,16 @@ class ViewController: UIViewController {
             }
             
             do {
+                // JSONデコード
                 let weatherData = try JSONDecoder().decode(WeatherData.self, from: data)
+                // 非同期処理？
                 DispatchQueue.main.async {
                     print(resp)
                     print(weatherData)
                     let temp = "\(weatherData.main.temp)°C"
                     let weather = weatherData.weather.first?.description ?? "不明"
                     
+                    // sqlite保存
                     if (self.oneSqlite.createOneDB()){
                         if (self.oneSqlite.createOneTable()){
                             let result = self.oneSqlite.insertOneTable(temperature: temp, weather: weather)
