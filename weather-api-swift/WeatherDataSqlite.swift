@@ -7,19 +7,20 @@ class OneSqlite: NSObject {
     
     // データベース（ファイル）作成
     func createOneDB() -> Bool {
-        sqlite3_close(self.dbPointer)
-        self.dbPointer = nil
+        sqlite3_close(self.dbPointer) //開きっぱなしだとリソースの無駄遣いになるため、前回開いたDBを一度閉じる（作り直しではない）
+        self.dbPointer = nil // DBの住所
+        // DBの保存場所（パス）を取得
         let filePath = try! FileManager.default.url(
             for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
             .appendingPathComponent(self.dbfile)
-        
-        self.dbPointer = nil
-        let fileManager = FileManager.default
+        let fileManager = FileManager.default //ファイル操作をするためのクラス（defaultはインスタンス）
+        // データベースファイルが存在するかチェック
         if fileManager.fileExists(atPath: filePath.path) {
             print("データベースファイルは既に存在しています: \(filePath.path)")
         } else {
             print("データベースファイルが作成されました: \(filePath.path)")
         }
+        // DBを開く　or　DB作成 (ファイルへのパス, アクセス用ポインタ)
         if sqlite3_open(filePath.path, &self.dbPointer) == SQLITE_OK {
             return true
         } else {
@@ -39,7 +40,7 @@ class OneSqlite: NSObject {
         let fileManager = FileManager.default
         if fileManager.fileExists(atPath: filePath.path) {
             do {
-                try fileManager.removeItem(at: filePath)
+                try fileManager.removeItem(at: filePath) // パスに存在するDBを削除
                 print("データベースファイルを削除しました: \(filePath.path)")
                 self.dbPointer = nil
                 return true
@@ -56,6 +57,7 @@ class OneSqlite: NSObject {
     
     // テーブル作成
     func createOneTable() -> Bool {
+        // SQL文：テーブルが存在しない場合のみ作成するよう指示
         let createSql = """
             CREATE TABLE IF NOT EXISTS members (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,8 +65,13 @@ class OneSqlite: NSObject {
                 weather TEXT
             );
         """
+        
         var createTable: OpaquePointer? = nil
+        
+        // SQL文をコンパイルして準備
+        // 引数(DBへのポインタ, 実行するSQL分, SQL分のバイト数, SQLstmtをの準備用ポインタ, 残り(複数行ある場合など)のSQL文)
         if sqlite3_prepare_v2(self.dbPointer, createSql, -1, &createTable, nil) == SQLITE_OK {
+            // 準備成功したら実行
             if sqlite3_step(createTable) == SQLITE_DONE {
                 return true
             } else {
@@ -79,6 +86,7 @@ class OneSqlite: NSObject {
     
     // データ挿入
     func insertOneTable(temperature: String, weather: String) -> Bool {
+        // SQL文：membersテーブルに追加するよう指示
         let insertSql = """
             INSERT INTO members
             (temperature, weather)
@@ -131,7 +139,7 @@ class OneSqlite: NSObject {
     }
     
     
-    /// テーブル状況確認用関数
+    /// テーブル情報取得（状況確認用関数）
     func printAllMembers(){
         let querySql = "SELECT * FROM members"
         var queryStmt: OpaquePointer? = nil
