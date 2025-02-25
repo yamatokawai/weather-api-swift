@@ -7,7 +7,9 @@ class OneSqlite: NSObject {
     
     // データベース（ファイル）作成
     func createOneDB() -> Bool {
-        sqlite3_close(self.dbPointer) //開きっぱなしだとリソースの無駄遣いになるため、前回開いたDBを一度閉じる（作り直しではない）
+        if sqlite3_close(dbPointer) != SQLITE_OK {
+            print("Error closing database: \(String(cString: sqlite3_errmsg(dbPointer)))")
+        } //開きっぱなしだとリソースの無駄遣いになるため、前回開いたDBを一度閉じる（作り直しではない）
         self.dbPointer = nil // DBの住所
         // DBの保存場所（パス）を取得
         let filePath = try! FileManager.default.url(
@@ -53,7 +55,7 @@ class OneSqlite: NSObject {
             return false
         }
     }
-
+    
     
     // テーブル作成
     func createOneTable() -> Bool {
@@ -68,7 +70,7 @@ class OneSqlite: NSObject {
         
         // コンパイルしたSQL文が格納される変数
         var createTable: OpaquePointer? = nil
-    
+        
         // 引数(DBへのポインタ, 実行するSQL分, SQL分のバイト数, SQLstmtの準備用ポインタ, 残り(複数行ある場合など)のSQL文)
         if sqlite3_prepare_v2(self.dbPointer, createSql, -1, &createTable, nil) == SQLITE_OK {
             // 準備成功したら実行
@@ -82,6 +84,8 @@ class OneSqlite: NSObject {
             print("Error: Table creation SQL preparation failed")
             return false
         }
+        sqlite3_finalize(createTable)
+        return false
     }
     
     // データ挿入
@@ -119,20 +123,39 @@ class OneSqlite: NSObject {
     /// テーブル削除
     /// - Returns: テーブル削除結果
     func deleteOneTable() -> Bool {
-        let deleteSql = "DELETE FROM members";
+        let deleteSql = "DELETE FROM members"
         var deleteStmt: OpaquePointer? = nil
         
         if sqlite3_prepare_v2(self.dbPointer, (deleteSql as NSString).utf8String, -1, &deleteStmt, nil) != SQLITE_OK {
-            print("sqlite3_prepare_v2 error")
+            let errorMessage = String(cString: sqlite3_errmsg(self.dbPointer))
+            print("sqlite3_prepare_v2 error delete: \(errorMessage)")
             return false
         }
         
         sqlite3_bind_int(deleteStmt, 1, 0)
-        
-        if sqlite3_step(deleteStmt) != SQLITE_DONE {
-            print("sqlite3_step error")
+        while sqlite3_step(deleteStmt) == SQLITE_ROW {
+            let id = sqlite3_column_int(deleteStmt, 0)
+            
+            // IDを使ってDELETE実行
+            let deleteSql = "DELETE FROM members WHERE id = ?"
+            var deleteStmt: OpaquePointer? = nil
+            
+            if sqlite3_prepare_v2(self.dbPointer, (deleteSql as NSString).utf8String, -1, &deleteStmt, nil) != SQLITE_OK {
+                let errorMessage = String(cString: sqlite3_errmsg(self.dbPointer))
+                print("sqlite3_prepare_v2 error delete: \(errorMessage)")
+                break
+            }
+            
+            // idをバインドしてDELETEを実行
+            sqlite3_bind_int(deleteStmt, 1, id)
+            
+            if sqlite3_step(deleteStmt) != SQLITE_DONE {
+                let errorMessage = String(cString: sqlite3_errmsg(self.dbPointer))
+                print("sqlite3_step error delete: \(errorMessage)")
+                break
+            }
+            
             sqlite3_finalize(deleteStmt)
-            return false
         }
         
         sqlite3_finalize(deleteStmt)
@@ -156,5 +179,6 @@ class OneSqlite: NSObject {
         } else {
             print("だめ")
         }
+        sqlite3_finalize(queryStmt)
     }
 }

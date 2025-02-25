@@ -1,79 +1,63 @@
 
 
 import UIKit
-
-struct WeatherData: Codable {
-    struct Main: Codable {
-        let temp: Double
-    }
-    struct Weather: Codable{
-        let description: String
-    }
-    let main: Main
-    let weather: [Weather]
-}
+//import MapKit
+import CoreLocation
 
 class ViewController: UIViewController {
+    
     fileprivate var oneSqlite: OneSqlite!
+    fileprivate var weatherData : WeatherDataFetch!
+    
+    
+    @IBOutlet weak var titleLabel: UILabel!
+    @IBOutlet weak var postalCodeInput: UITextField!
+    @IBOutlet weak var searchButton: UIButton!
+    
+    
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        //        locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        //        locationManager.requestWhenInUseAuthorization()
+        //        getCurrentLocation()
         self.oneSqlite = OneSqlite()
-//        self.oneSqlite.deleteDatabase()
-        fetchWeather()
+        //        self.oneSqlite.deleteDatabase()
+        self.weatherData = WeatherDataFetch()
+        print("aaa")
+        //
     }
     
-    func fetchWeather() {
-        let latitude = "38.1705275"
-        let longitude = "140.417219"
-        let API_KEY = "410d8b4757a0796aa539f00fadd458c5"
-        let urlString = "https://api.openweathermap.org/data/2.5/weather?lat=\(latitude)&lon=\(longitude)&units=metric&appid=\(API_KEY)"
-        guard let url = URL(string: urlString) else { return }
+    @IBAction func buttonTapped(_ sender: Any) {
+        guard let inputText = postalCodeInput.text else { return }
         
-        // openWeatherApi：天気情報取得
-        let task = URLSession.shared.dataTask(with: url) { data, response, error in
+        findLocationByPostalCode(
+            postalCode: inputText, completion: {result, error in
+                print("result")
+            })
+    }
+    
+    func findLocationByPostalCode(postalCode: String,completion: @escaping(String?, Error?) -> Void) {
+        CLGeocoder().geocodeAddressString(postalCode) {
+            (placemarks, error) in
             if let error = error {
-                print(error)
+                completion(nil,error)
                 return
             }
-            
-            guard let data = data else {
-                print("no data")
-                return
-            }
-            
-            guard let resp = response else {
-                print("no data")
-                return
-            }
-            
-            do {
-                // JSONデコード
-                let weatherData = try JSONDecoder().decode(WeatherData.self, from: data)
-                // 非同期処理？
-                DispatchQueue.main.async {
-                    print(resp)
-                    print(weatherData)
-                    let temp = "\(weatherData.main.temp)°C"
-                    let weather = weatherData.weather.first?.description ?? "不明"
-                    
-                    // sqlite保存
-                    if (self.oneSqlite.createOneDB()){
-                        if (self.oneSqlite.createOneTable()){
-                            let result = self.oneSqlite.insertOneTable(temperature: temp, weather: weather)
-                            if result {
-                                self.oneSqlite.printAllMembers()
-                            } else {
-                                print(result)
-                            }
-                        }
-                    }
-                    
+            if let placemark = placemarks?.first {
+                if let lat = placemark.location?.coordinate.latitude,let lon = placemark.location?.coordinate.longitude {
+                    self.weatherData.fetchWeather(latitude: lat, longitude: lon, completion: { result in
+                        if !self.oneSqlite.createOneDB() { return }
+                        if !self.oneSqlite.deleteOneTable() {return}
+                        if !self.oneSqlite.createOneTable() { return }
+                        guard let resp = result else {return}
+                        let temp = "\(resp.main.temp)°C"
+                        let weather = resp.weather.first?.description ?? "不明"
+                        let insertResult = self.oneSqlite.insertOneTable(temperature: temp, weather: weather)
+                        insertResult ? self.oneSqlite.printAllMembers() : print("失敗");
+                    })
                 }
-            } catch{
-                print("error")
             }
         }
-        task.resume()
-    }
+    };
 }
